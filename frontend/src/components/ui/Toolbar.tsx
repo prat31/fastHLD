@@ -1,4 +1,5 @@
-import { Undo2, Redo2, Trash2, Download, Sun, Moon, Monitor } from 'lucide-react';
+import { Undo2, Redo2, Trash2, Download, ImageDown, Sun, Moon, Monitor } from 'lucide-react';
+import { toPng } from 'html-to-image';
 import { useDiagramStore } from '../../store/diagramStore';
 import { useTheme, type ThemePreference } from '../../hooks/useTheme';
 import type { ReactNode } from 'react';
@@ -25,6 +26,20 @@ export default function Toolbar() {
     URL.revokeObjectURL(url);
   };
 
+  const exportPng = () => {
+    const el = document.querySelector('.react-flow') as HTMLElement | null;
+    if (!el) return;
+    const isDark = document.documentElement.classList.contains('dark');
+    toPng(el, { backgroundColor: isDark ? '#0f172a' : '#f8fafc' })
+      .then((dataUrl) => {
+        const a = document.createElement('a');
+        a.download = 'fasthld-diagram.png';
+        a.href = dataUrl;
+        a.click();
+      })
+      .catch(console.error);
+  };
+
   return (
     <div className="flex items-center gap-1 px-3 py-2 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 shadow-sm">
       <span className="text-sm font-bold text-slate-800 dark:text-slate-100 mr-3">⚡ fastHLD</span>
@@ -43,6 +58,9 @@ export default function Toolbar() {
         </IconBtn>
         <IconBtn onClick={exportJson} title="Export JSON">
           <Download size={16} />
+        </IconBtn>
+        <IconBtn onClick={exportPng} title="Export PNG">
+          <ImageDown size={16} />
         </IconBtn>
       </div>
 

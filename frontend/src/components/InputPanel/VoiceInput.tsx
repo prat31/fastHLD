@@ -1,14 +1,15 @@
 import { Mic, MicOff } from 'lucide-react';
-import type { VoiceState } from '../../hooks/useVoiceInput';
+import type { VoiceMode, VoiceState } from '../../hooks/useVoiceInput';
 
 interface VoiceInputProps {
   voiceState: VoiceState;
   supported: boolean;
+  mode: VoiceMode;
   onStart: () => void;
   onStop: () => void;
 }
 
-export default function VoiceInput({ voiceState, supported, onStart, onStop }: VoiceInputProps) {
+export default function VoiceInput({ voiceState, supported, mode, onStart, onStop }: VoiceInputProps) {
   if (!supported) {
     return (
       <div
@@ -30,8 +31,6 @@ export default function VoiceInput({ voiceState, supported, onStart, onStop }: V
         onMouseUp={onStop}
         onTouchStart={onStart}
         onTouchEnd={onStop}
-        // tabIndex={-1} prevents the button from receiving keyboard focus,
-        // which would cause Space to activate it and conflict with press-to-talk
         tabIndex={-1}
         className={[
           'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors shadow-sm select-none',
@@ -59,6 +58,14 @@ export default function VoiceInput({ voiceState, supported, onStart, onStop }: V
             or button
           </span>
         )}
+        <span className={[
+          'text-[10px] font-medium select-none',
+          mode === 'whisper'
+            ? 'text-emerald-500 dark:text-emerald-400'
+            : 'text-slate-400 dark:text-slate-500',
+        ].join(' ')}>
+          {mode === 'whisper' ? '✦ Whisper' : '⬡ Browser'}
+        </span>
       </div>
     </div>
   );

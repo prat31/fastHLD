@@ -1,14 +1,22 @@
+import { useEffect, useState } from 'react';
 import TextInput from './TextInput';
 import VoiceInput from './VoiceInput';
 import { useDiagramMutation } from '../../hooks/useDiagramMutation';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
+import { getConfig } from '../../services/api';
 import { AlertCircle } from 'lucide-react';
 
 export default function InputPanel() {
   const { loading, error, send } = useDiagramMutation();
+  const [whisperAvailable, setWhisperAvailable] = useState(false);
 
-  const { voiceState, supported, start, stop } = useVoiceInput({
+  useEffect(() => {
+    getConfig().then(({ whisper_available }) => setWhisperAvailable(whisper_available));
+  }, []);
+
+  const { voiceState, supported, mode, start, stop } = useVoiceInput({
     onTranscript: (text) => send(text),
+    whisperAvailable,
   });
 
   return (
@@ -26,6 +34,7 @@ export default function InputPanel() {
         <VoiceInput
           voiceState={voiceState}
           supported={supported}
+          mode={mode}
           onStart={() => start(true)}
           onStop={stop}
         />

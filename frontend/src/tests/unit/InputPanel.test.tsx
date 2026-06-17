@@ -59,21 +59,21 @@ describe('TextInput', () => {
 describe('VoiceInput', () => {
   it('shows mic button when supported', () => {
     render(
-      <VoiceInput voiceState="idle" supported={true} onStart={vi.fn()} onStop={vi.fn()} />,
+      <VoiceInput voiceState="idle" supported={true} mode="browser" onStart={vi.fn()} onStop={vi.fn()} />,
     );
     expect(screen.getByRole('button')).toBeInTheDocument();
   });
 
   it('shows N/A message when not supported', () => {
     render(
-      <VoiceInput voiceState="idle" supported={false} onStart={vi.fn()} onStop={vi.fn()} />,
+      <VoiceInput voiceState="idle" supported={false} mode="browser" onStart={vi.fn()} onStop={vi.fn()} />,
     );
     expect(screen.getByText(/voice n\/a/i)).toBeInTheDocument();
   });
 
   it('shows Listening text when voiceState is listening', () => {
     render(
-      <VoiceInput voiceState="listening" supported={true} onStart={vi.fn()} onStop={vi.fn()} />,
+      <VoiceInput voiceState="listening" supported={true} mode="browser" onStart={vi.fn()} onStop={vi.fn()} />,
     );
     expect(screen.getByText(/listening/i)).toBeInTheDocument();
   });
@@ -81,7 +81,7 @@ describe('VoiceInput', () => {
   it('calls onStart on mouse down', async () => {
     const onStart = vi.fn();
     render(
-      <VoiceInput voiceState="idle" supported={true} onStart={onStart} onStop={vi.fn()} />,
+      <VoiceInput voiceState="idle" supported={true} mode="browser" onStart={onStart} onStop={vi.fn()} />,
     );
     fireEvent.mouseDown(screen.getByRole('button'));
     expect(onStart).toHaveBeenCalled();
@@ -90,7 +90,7 @@ describe('VoiceInput', () => {
   it('calls onStop on mouse up', async () => {
     const onStop = vi.fn();
     render(
-      <VoiceInput voiceState="listening" supported={true} onStart={vi.fn()} onStop={onStop} />,
+      <VoiceInput voiceState="listening" supported={true} mode="browser" onStart={vi.fn()} onStop={onStop} />,
     );
     fireEvent.mouseUp(screen.getByRole('button'));
     expect(onStop).toHaveBeenCalled();

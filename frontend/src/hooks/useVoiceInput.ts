@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { postTranscribe } from '../services/api';
 
 export type VoiceState = 'idle' | 'listening';
+export type VoiceMode = 'browser' | 'whisper';
 
 interface UseVoiceInputOptions {
   onTranscript: (text: string) => void;
   silenceMs?: number;
+  whisperAvailable?: boolean;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -12,16 +15,36 @@ type AnyRecognition = any;
 
 const INTERACTIVE_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'A']);
 
-export function useVoiceInput({ onTranscript, silenceMs = 1500 }: UseVoiceInputOptions) {
+export function useVoiceInput({
+  onTranscript,
+  silenceMs = 1500,
+  whisperAvailable = false,
+}: UseVoiceInputOptions) {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [supported] = useState(() => !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition);
 
-  const recognitionRef  = useRef<AnyRecognition>(null);
-  const isRecordingRef  = useRef(false); // sync guard against double-start
-  const isHeldRef       = useRef(false); // true while space/button is physically held
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const browserSupported = !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition;
+  const mediaDevicesSupported = !!(navigator.mediaDevices?.getUserMedia);
+
+  // Prefer Whisper when available and the browser supports MediaRecorder
+  const mode: VoiceMode = (whisperAvailable && mediaDevicesSupported) ? 'whisper' : 'browser';
+  const supported = mode === 'whisper' ? mediaDevicesSupported : browserSupported;
+
+  // Shared refs
+  const isRecordingRef = useRef(false);
+  const isHeldRef = useRef(false);
+
+  // Browser STT refs
+  const recognitionRef = useRef<AnyRecognition>(null);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const transcriptRef   = useRef('');
+  const transcriptRef = useRef('');
+
+  // Whisper refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // ---- Browser STT ----
 
   const clearSilenceTimer = () => {
     if (silenceTimerRef.current) {
@@ -30,15 +53,13 @@ export function useVoiceInput({ onTranscript, silenceMs = 1500 }: UseVoiceInputO
     }
   };
 
-  const stop = useCallback(() => {
+  const stopBrowser = useCallback(() => {
     clearSilenceTimer();
     isHeldRef.current = false;
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-    }
+    recognitionRef.current?.stop();
   }, []);
 
-  const start = useCallback((held = false) => {
+  const startBrowser = useCallback((held = false) => {
     if (isRecordingRef.current) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any;
@@ -64,12 +85,9 @@ export function useVoiceInput({ onTranscript, silenceMs = 1500 }: UseVoiceInputO
       }
       if (final) {
         transcriptRef.current += final;
-        // Only arm the silence timer when NOT in push-to-talk held mode.
-        // While holding space or the button, the user releases to stop —
-        // the silence timer would cut them off mid-sentence.
         if (!isHeldRef.current) {
           clearSilenceTimer();
-          silenceTimerRef.current = setTimeout(() => stop(), silenceMs);
+          silenceTimerRef.current = setTimeout(() => stopBrowser(), silenceMs);
         }
       }
     };
@@ -92,20 +110,83 @@ export function useVoiceInput({ onTranscript, silenceMs = 1500 }: UseVoiceInputO
 
     recognitionRef.current = recognition;
     recognition.start();
-  }, [silenceMs, stop, onTranscript]);
+  }, [silenceMs, stopBrowser, onTranscript]);
 
-  // Spacebar push-to-talk:
-  //   keydown (first press only) → start in held mode
-  //   keyup                      → stop
+  // ---- Whisper (MediaRecorder) ----
+
+  const stopWhisper = useCallback(() => {
+    isHeldRef.current = false;
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+  }, []);
+
+  const startWhisper = useCallback(async (held = false) => {
+    if (isRecordingRef.current) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      isRecordingRef.current = true;
+      isHeldRef.current = held;
+      audioChunksRef.current = [];
+
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        isRecordingRef.current = false;
+        isHeldRef.current = false;
+        setVoiceState('idle');
+        try {
+          const { transcript } = await postTranscribe(blob);
+          if (transcript.trim()) onTranscript(transcript.trim());
+        } catch (err) {
+          console.error('Whisper transcription error:', err);
+        }
+      };
+
+      mediaRecorder.start();
+      setVoiceState('listening');
+    } catch (err) {
+      console.error('Microphone access error:', err);
+      isRecordingRef.current = false;
+      isHeldRef.current = false;
+    }
+  }, [onTranscript]);
+
+  // ---- Unified interface ----
+
+  const start = useCallback((held = false) => {
+    if (mode === 'whisper') {
+      startWhisper(held);
+    } else {
+      startBrowser(held);
+    }
+  }, [mode, startWhisper, startBrowser]);
+
+  const stop = useCallback(() => {
+    if (mode === 'whisper') {
+      stopWhisper();
+    } else {
+      stopBrowser();
+    }
+  }, [mode, stopWhisper, stopBrowser]);
+
+  // ---- Spacebar push-to-talk ----
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.repeat) return; // ignore held-key repeats — we only care about the first press
+      if (e.repeat) return;
       const tag = (e.target as Element)?.tagName ?? '';
       if (e.code === 'Space' && !INTERACTIVE_TAGS.has(tag)) {
         e.preventDefault();
-        if (!isRecordingRef.current) {
-          start(true); // held = true → no silence timer
-        }
+        if (!isRecordingRef.current) start(true);
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -122,7 +203,12 @@ export function useVoiceInput({ onTranscript, silenceMs = 1500 }: UseVoiceInputO
     };
   }, [start, stop]);
 
-  useEffect(() => () => { clearSilenceTimer(); recognitionRef.current?.stop(); }, []);
+  useEffect(() => () => {
+    clearSilenceTimer();
+    recognitionRef.current?.stop();
+    mediaRecorderRef.current?.stop();
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+  }, []);
 
-  return { voiceState, supported, start, stop };
+  return { voiceState, supported, mode, start, stop };
 }

@@ -20,3 +20,24 @@ export async function getHealth(): Promise<{ status: string; provider: string }>
   if (!resp.ok) throw new Error('Health check failed');
   return resp.json();
 }
+
+export async function getConfig(): Promise<{ whisper_available: boolean }> {
+  try {
+    const resp = await fetch(`${BASE_URL}/api/config`);
+    if (!resp.ok) return { whisper_available: false };
+    return resp.json();
+  } catch {
+    return { whisper_available: false };
+  }
+}
+
+export async function postTranscribe(audio: Blob): Promise<{ transcript: string }> {
+  const form = new FormData();
+  form.append('file', audio, 'audio.webm');
+  const resp = await fetch(`${BASE_URL}/api/transcribe`, { method: 'POST', body: form });
+  if (!resp.ok) {
+    const detail = await resp.text();
+    throw new Error(`Transcribe ${resp.status}: ${detail}`);
+  }
+  return resp.json();
+}

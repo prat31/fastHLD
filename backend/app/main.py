@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 load_dotenv()
 
 from app.llm.factory import get_provider
-from app.api import health, diagram
+from app.api import health, diagram, config, transcribe
 
 
 @asynccontextmanager
@@ -28,3 +28,5 @@ app.add_middleware(
 
 app.include_router(health.router, prefix="/api")
 app.include_router(diagram.router, prefix="/api")
+app.include_router(config.router, prefix="/api")
+app.include_router(transcribe.router, prefix="/api")
