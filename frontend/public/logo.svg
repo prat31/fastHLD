@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80">
+  <!-- Icon box -->
+  <rect x="0" y="8" width="64" height="64" rx="14" fill="#0f172a"/>
+
+  <!-- HLD nodes -->
+  <rect x="5"  y="26" width="16" height="10" rx="2.5" fill="#3b82f6"/>
+  <rect x="24" y="19" width="16" height="10" rx="2.5" fill="#60a5fa"/>
+  <rect x="43" y="26" width="16" height="10" rx="2.5" fill="#3b82f6"/>
+  <path d="M21 31 L24 24" stroke="#475569" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M40 24 L43 31" stroke="#475569" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Lightning -->
+  <polygon points="38,38 31,52 35,52 29,64 41,46 37,46" fill="#facc15"/>
+
+  <!-- Wordmark -->
+  <!-- "fast" in yellow -->
+  <text x="80" y="53" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
+        font-size="38" font-weight="800" fill="#facc15" letter-spacing="-1">fast</text>
+  <!-- "HLD" in white -->
+  <text x="196" y="53" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
+        font-size="38" font-weight="800" fill="#f1f5f9" letter-spacing="-1">HLD</text>
+</svg>
