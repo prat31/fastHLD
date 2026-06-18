@@ -26,13 +26,16 @@ export function useVoiceInput({
   const browserSupported = !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition;
   const mediaDevicesSupported = !!(navigator.mediaDevices?.getUserMedia);
 
-  // Prefer Whisper when available and the browser supports MediaRecorder
   const mode: VoiceMode = (whisperAvailable && mediaDevicesSupported) ? 'whisper' : 'browser';
   const supported = mode === 'whisper' ? mediaDevicesSupported : browserSupported;
 
+  // Keep onTranscript in a ref so callbacks don't need it as a dep and stay stable.
+  const onTranscriptRef = useRef(onTranscript);
+  useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
+
   // Shared refs
   const isRecordingRef = useRef(false);
-  const isHeldRef = useRef(false);
+  const isHeldRef = useRef(false);       // true while space/button is physically held
 
   // Browser STT refs
   const recognitionRef = useRef<AnyRecognition>(null);
@@ -46,18 +49,19 @@ export function useVoiceInput({
 
   // ---- Browser STT ----
 
-  const clearSilenceTimer = () => {
+  const clearSilenceTimer = useCallback(() => {
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
     }
-  };
+  }, []);
 
   const stopBrowser = useCallback(() => {
     clearSilenceTimer();
+    // Set isHeldRef BEFORE calling .stop() so onend knows this was our intentional stop.
     isHeldRef.current = false;
     recognitionRef.current?.stop();
-  }, []);
+  }, [clearSilenceTimer]);
 
   const startBrowser = useCallback((held = false) => {
     if (isRecordingRef.current) return;
@@ -85,6 +89,7 @@ export function useVoiceInput({
       }
       if (final) {
         transcriptRef.current += final;
+        // Only arm silence timer when NOT in push-to-talk held mode.
         if (!isHeldRef.current) {
           clearSilenceTimer();
           silenceTimerRef.current = setTimeout(() => stopBrowser(), silenceMs);
@@ -93,15 +98,28 @@ export function useVoiceInput({
     };
 
     recognition.onend = () => {
+      // Chrome terminates continuous recognition on its own (on silence, on result, etc.).
+      // If the user is still physically holding space/button, restart immediately.
+      if (isHeldRef.current) {
+        try {
+          recognition.start();
+        } catch {
+          // start() can throw if called too quickly after stop; ignore and let PTT end naturally
+          isRecordingRef.current = false;
+          setVoiceState('idle');
+        }
+        return;
+      }
       clearSilenceTimer();
       isRecordingRef.current = false;
-      isHeldRef.current = false;
       const text = transcriptRef.current.trim();
       setVoiceState('idle');
-      if (text) onTranscript(text);
+      if (text) onTranscriptRef.current(text);
     };
 
-    recognition.onerror = () => {
+    recognition.onerror = (event: any) => {
+      // 'no-speech' is common mid-session; don't abort if still held
+      if (isHeldRef.current && event?.error === 'no-speech') return;
       clearSilenceTimer();
       isRecordingRef.current = false;
       isHeldRef.current = false;
@@ -110,7 +128,7 @@ export function useVoiceInput({
 
     recognitionRef.current = recognition;
     recognition.start();
-  }, [silenceMs, stopBrowser, onTranscript]);
+  }, [silenceMs, stopBrowser, clearSilenceTimer]);  // onTranscript intentionally excluded (via ref)
 
   // ---- Whisper (MediaRecorder) ----
 
@@ -146,7 +164,7 @@ export function useVoiceInput({
         setVoiceState('idle');
         try {
           const { transcript } = await postTranscribe(blob);
-          if (transcript.trim()) onTranscript(transcript.trim());
+          if (transcript.trim()) onTranscriptRef.current(transcript.trim());
         } catch (err) {
           console.error('Whisper transcription error:', err);
         }
@@ -159,27 +177,26 @@ export function useVoiceInput({
       isRecordingRef.current = false;
       isHeldRef.current = false;
     }
-  }, [onTranscript]);
+  }, []); // onTranscript intentionally excluded (via ref)
 
   // ---- Unified interface ----
+  // mode is a string computed at render time; keep it in a ref so the effect below
+  // doesn't have to re-register listeners whenever mode hasn't actually changed.
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
   const start = useCallback((held = false) => {
-    if (mode === 'whisper') {
-      startWhisper(held);
-    } else {
-      startBrowser(held);
-    }
-  }, [mode, startWhisper, startBrowser]);
+    if (modeRef.current === 'whisper') startWhisper(held);
+    else startBrowser(held);
+  }, [startWhisper, startBrowser]);
 
   const stop = useCallback(() => {
-    if (mode === 'whisper') {
-      stopWhisper();
-    } else {
-      stopBrowser();
-    }
-  }, [mode, stopWhisper, stopBrowser]);
+    if (modeRef.current === 'whisper') stopWhisper();
+    else stopBrowser();
+  }, [stopWhisper, stopBrowser]);
 
   // ---- Spacebar push-to-talk ----
+  // start/stop are now stable (no onTranscript dep) so this effect mounts once.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.repeat) return;
@@ -203,12 +220,13 @@ export function useVoiceInput({
     };
   }, [start, stop]);
 
+  // Cleanup on unmount
   useEffect(() => () => {
     clearSilenceTimer();
     recognitionRef.current?.stop();
     mediaRecorderRef.current?.stop();
     streamRef.current?.getTracks().forEach((t) => t.stop());
-  }, []);
+  }, [clearSilenceTimer]);
 
   return { voiceState, supported, mode, start, stop };
 }

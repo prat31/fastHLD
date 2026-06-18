@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import TextInput from './TextInput';
 import VoiceInput from './VoiceInput';
 import { useDiagramMutation } from '../../hooks/useDiagramMutation';
@@ -14,8 +14,10 @@ export default function InputPanel() {
     getConfig().then(({ whisper_available }) => setWhisperAvailable(whisper_available));
   }, []);
 
+  const onTranscript = useCallback((text: string) => send(text), [send]);
+
   const { voiceState, supported, mode, start, stop } = useVoiceInput({
-    onTranscript: (text) => send(text),
+    onTranscript,
     whisperAvailable,
   });
 
