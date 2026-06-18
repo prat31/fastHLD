@@ -63,6 +63,17 @@ describe('diagramStore — applyOps', () => {
     expect(edges[0].label).toBe('HTTP');
   });
 
+  it('add_edge preserves sourceHandle/targetHandle from a manual drag', () => {
+    useDiagramStore.getState().applyOps([
+      { op: 'add_node', id: 'n1', type: 'generic_server', label: 'A', x: 0, y: 0 },
+      { op: 'add_node', id: 'n2', type: 'generic_server', label: 'B', x: 0, y: 0 },
+      { op: 'add_edge', id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'right', targetHandle: 'left' },
+    ]);
+    const { edges } = useDiagramStore.getState();
+    expect(edges[0].sourceHandle).toBe('right');
+    expect(edges[0].targetHandle).toBe('left');
+  });
+
   it('remove_edge deletes an edge', () => {
     useDiagramStore.getState().applyOps([
       { op: 'add_node', id: 'n1', type: 'generic_server', label: 'A', x: 0, y: 0 },

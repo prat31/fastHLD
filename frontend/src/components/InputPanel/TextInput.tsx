@@ -1,28 +1,21 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 
 interface TextInputProps {
-  onSend: (text: string) => void;
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
   loading: boolean;
   placeholder?: string;
 }
 
-export default function TextInput({ onSend, loading, placeholder }: TextInputProps) {
-  const [value, setValue] = useState('');
+export default function TextInput({ value, onChange, onSubmit, loading, placeholder }: TextInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const submit = () => {
-    const trimmed = value.trim();
-    if (!trimmed || loading) return;
-    onSend(trimmed);
-    setValue('');
-    textareaRef.current?.focus();
-  };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      submit();
+      onSubmit();
     }
   };
 
@@ -31,7 +24,7 @@ export default function TextInput({ onSend, loading, placeholder }: TextInputPro
       <textarea
         ref={textareaRef}
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
         rows={2}
         placeholder={placeholder ?? 'Describe your architecture… (Enter to send, Shift+Enter for newline)'}
@@ -46,7 +39,7 @@ export default function TextInput({ onSend, loading, placeholder }: TextInputPro
         ].join(' ')}
       />
       <button
-        onClick={submit}
+        onClick={onSubmit}
         disabled={loading || !value.trim()}
         className={[
           'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-sm',

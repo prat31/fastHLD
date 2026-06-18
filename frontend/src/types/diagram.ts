@@ -33,6 +33,8 @@ export interface AddNodeOp {
   label: string;
   x: number;
   y: number;
+  width?: number;
+  height?: number;
   data?: Record<string, unknown>;
 }
 
@@ -55,6 +57,8 @@ export interface AddEdgeOp {
   id: string;
   source: string;
   target: string;
+  sourceHandle?: string;
+  targetHandle?: string;
   label?: string;
   animated?: boolean;
 }

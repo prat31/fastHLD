@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import type { Node, Edge } from '@xyflow/react';
 import type { DiagramOp, DiagramState } from '../types/diagram';
 
+export const DEFAULT_NODE_WIDTH = 104;
+export const DEFAULT_NODE_HEIGHT = 76;
+
 interface HistoryEntry {
   nodes: Node[];
   edges: Edge[];
@@ -19,6 +22,10 @@ interface DiagramStore {
   undo: () => void;
   redo: () => void;
   snapshot: () => DiagramState;
+  /** Deep snapshot of the current canvas, used by the prompt-history panel. */
+  capture: () => HistoryEntry;
+  /** Replace the whole canvas (e.g. revert to a history entry); undoable. */
+  restore: (entry: HistoryEntry) => void;
 }
 
 function pushHistory(past: HistoryEntry[], nodes: Node[], edges: Edge[]): HistoryEntry[] {
@@ -53,6 +60,11 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
               id: op.id,
               type: 'serviceNode',
               position: { x: op.x, y: op.y },
+              // Definite initial dimensions so React Flow measures all four
+              // handles at distinct positions — otherwise dragged connections
+              // all originate from the same point. NodeResizer updates these.
+              width: op.width ?? DEFAULT_NODE_WIDTH,
+              height: op.height ?? DEFAULT_NODE_HEIGHT,
               data: { label: op.label, serviceType: op.type, ...op.data },
             },
           ];
@@ -85,6 +97,10 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
               id: op.id,
               source: op.source,
               target: op.target,
+              // Preserve which dot the user dragged from / dropped on, so the
+              // edge renders from the correct handle (not the default top one).
+              ...(op.sourceHandle ? { sourceHandle: op.sourceHandle } : {}),
+              ...(op.targetHandle ? { targetHandle: op.targetHandle } : {}),
               label: op.label ?? '',
               animated: op.animated ?? false,
               type: 'smoothstep',
@@ -120,6 +136,25 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
       edges: next.edges,
       past: pushHistory(past, nodes, edges),
       future: future.slice(1),
+    });
+  },
+
+  capture: () => {
+    const { nodes, edges } = get();
+    // Structured deep copy so later mutations don't alter the saved entry.
+    return {
+      nodes: structuredClone(nodes),
+      edges: structuredClone(edges),
+    };
+  },
+
+  restore: (entry) => {
+    const { nodes, edges, past } = get();
+    set({
+      nodes: structuredClone(entry.nodes),
+      edges: structuredClone(entry.edges),
+      past: pushHistory(past, nodes, edges),
+      future: [],
     });
   },
 

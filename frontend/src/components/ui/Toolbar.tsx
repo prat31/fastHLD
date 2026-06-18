@@ -42,7 +42,10 @@ export default function Toolbar() {
 
   return (
     <div className="flex items-center gap-1 px-3 py-2 bg-white dark:bg-slate-800 border-b border-slate-100 dark:border-slate-700 shadow-sm">
-      <span className="text-sm font-bold text-slate-800 dark:text-slate-100 mr-3">⚡ fastHLD</span>
+      <span className="flex items-center gap-1.5 mr-3">
+        <img src="/favicon.svg" alt="" className="h-6 w-6" />
+        <span className="text-sm font-bold text-slate-800 dark:text-slate-100">fastHLD</span>
+      </span>
 
       {/* Left: diagram actions */}
       <div className="flex items-center gap-1">

@@ -38,12 +38,18 @@ No mouse required. No awkward silences while you hunt for the right shape.
 | Feature | Details |
 |---------|---------|
 | 🎙️ **Voice input** | Hold `Space` (or the mic button) → speak → release → diagram updates |
+| 🔊 **STT — dual mode** | OpenAI Whisper (set `OPENAI_API_KEY`) or browser Web Speech API — auto-detected |
 | ⌨️ **Text input** | Type your instruction, press `Enter` to send |
 | 🤖 **LLM-powered** | Ollama (local, free), OpenAI, or Anthropic — one env var to switch |
+| 🖼️ **Image import** | Upload a screenshot/photo of an HLD diagram → a vision LLM recreates it as nodes & edges, preserving layout |
 | 🗂️ **53 service icons** | AWS (15), GCP (9), Azure (7), open-source (12), generic (10) |
+| 🧭 **Resizable palette** | Drag the sidebar edge; it collapses to icon-only at narrow widths |
+| 🖱️ **Right-click menu** | Rename, duplicate, disconnect, or delete any node |
+| 📐 **Resize nodes** | Drag the corners/edges of a selected node |
+| 🕘 **Prompt history** | Floating panel lists every text/voice/image prompt — revert any one |
 | 🎨 **Dark mode** | Light / Dark / System — toggle top-right |
 | ↩️ **Undo/Redo** | Full 50-step history, `Ctrl+Z` works |
-| 📦 **Export** | Download diagram as JSON |
+| 📦 **Export** | Download diagram as JSON or PNG |
 | 🗑️ **Delete** | Select node(s) → `Delete` key |
 
 ---
@@ -84,7 +90,9 @@ npm install
 npm run dev
 ```
 
-Frontend runs at **http://localhost:5173**. Open it in Chrome or Edge (Web Speech API support required for voice).
+Frontend runs at **http://localhost:5173**. Open it in Chrome or Edge for the best experience.
+
+> **Voice input modes:** if `OPENAI_API_KEY` is set in the backend, voice uses **OpenAI Whisper** (works in any browser). Without it, the app falls back to the **browser Web Speech API** (Chrome/Edge only).
 
 ---
 
@@ -103,6 +111,10 @@ Set `LLM_PROVIDER` in `backend/.env`. That's the only change needed.
 LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-...
 ```
+
+> **Bonus:** setting `OPENAI_API_KEY` (regardless of `LLM_PROVIDER`) also enables **OpenAI Whisper** for voice transcription — more accurate than the browser's built-in speech recognition and works in any browser.
+>
+> **Image import** also needs a vision-capable model: set `OPENAI_API_KEY` (uses `gpt-4o`) or `ANTHROPIC_API_KEY` (uses Claude). The default local Ollama model can't read images, so the upload button returns a clear error until one of those keys is set.
 
 ---
 
@@ -142,23 +154,36 @@ npm run test:e2e
 ```
 User speech / text
        │
-       ▼
- Web Speech API          ← browser-native, no API key
- (text transcript)
-       │
-       ▼
-  FastAPI backend
-  POST /api/diagram/instruct
-  { instruction, current_diagram_state }
-       │
-       ▼
-  LLM (Ollama / OpenAI / Anthropic)
-  returns JSON array of ops:
-  [ {"op":"add_node", "type":"aws_ec2", ...}, ... ]
-       │
-       ▼
-  React frontend
-  Zustand store → React Flow canvas
+       ├─── Text typed ──────────────────────────────────────────┐
+       │                                                         │
+       └─── Voice (hold Space / mic button)                      │
+               │                                                 │
+               ├── OPENAI_API_KEY set?                           │
+               │       │                                         │
+               │      YES → MediaRecorder (any browser)          │
+               │               │                                 │
+               │               ▼                                 │
+               │        POST /api/transcribe                     │
+               │        OpenAI Whisper API                       │
+               │               │                                 │
+               │              NO → Web Speech API                │
+               │                   (Chrome / Edge, no key)       │
+               │                                                 │
+               └─────────────────── transcript ──────────────────┘
+                                                         │
+                                                         ▼
+                                              FastAPI backend
+                                        POST /api/diagram/instruct
+                                       { instruction, diagram_state }
+                                                         │
+                                                         ▼
+                                       LLM (Ollama / OpenAI / Anthropic)
+                                         returns JSON array of ops:
+                                     [ {"op":"add_node", ...}, ... ]
+                                                         │
+                                                         ▼
+                                              React frontend
+                                        Zustand store → React Flow canvas
 ```
 
 The LLM always receives the **full current diagram state** so it understands context — "add a cache in front of the database" works because it knows which database already exists.

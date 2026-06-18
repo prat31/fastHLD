@@ -148,3 +148,59 @@ async def test_instruct_requires_non_empty_instruction():
             "diagram_state": {"nodes": [], "edges": []}
         })
     assert resp.status_code == 422
+
+
+# ---------- parse-image ----------
+
+class MockVisionProvider:
+    def __init__(self, response_str: str):
+        self._response = response_str
+
+    @property
+    def name(self) -> str:
+        return "mock-vision/test"
+
+    async def complete_vision(self, system, text, image_b64, media_type) -> str:
+        return self._response
+
+
+@pytest.mark.asyncio
+async def test_parse_image_503_without_vision_provider(monkeypatch):
+    monkeypatch.setattr("app.api.diagram.get_vision_provider", lambda: None)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        resp = await ac.post(
+            "/api/diagram/parse-image",
+            files={"file": ("diagram.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+        )
+    assert resp.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_parse_image_returns_ops(monkeypatch):
+    monkeypatch.setattr(
+        "app.api.diagram.get_vision_provider",
+        lambda: MockVisionProvider(ADD_EDGE_OP),
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        resp = await ac.post(
+            "/api/diagram/parse-image",
+            files={"file": ("diagram.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["ops"]) == 3
+    assert {op["op"] for op in data["ops"]} == {"add_node", "add_edge"}
+
+
+@pytest.mark.asyncio
+async def test_parse_image_rejects_empty_upload(monkeypatch):
+    monkeypatch.setattr(
+        "app.api.diagram.get_vision_provider",
+        lambda: MockVisionProvider("[]"),
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        resp = await ac.post(
+            "/api/diagram/parse-image",
+            files={"file": ("empty.png", b"", "image/png")},
+        )
+    assert resp.status_code == 400

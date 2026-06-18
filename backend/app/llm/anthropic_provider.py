@@ -19,3 +19,29 @@ class AnthropicProvider(LLMProvider):
             messages=messages,
         )
         return response.content[0].text
+
+    async def complete_vision(
+        self, system: str, text: str, image_b64: str, media_type: str
+    ) -> str:
+        response = await self._client.messages.create(
+            model=self._model,
+            max_tokens=4096,
+            system=system,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": image_b64,
+                            },
+                        },
+                        {"type": "text", "text": text},
+                    ],
+                }
+            ],
+        )
+        return response.content[0].text

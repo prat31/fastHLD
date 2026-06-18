@@ -41,3 +41,14 @@ export async function postTranscribe(audio: Blob): Promise<{ transcript: string 
   }
   return resp.json();
 }
+
+export async function postParseImage(image: File): Promise<InstructResponse> {
+  const form = new FormData();
+  form.append('file', image, image.name);
+  const resp = await fetch(`${BASE_URL}/api/diagram/parse-image`, { method: 'POST', body: form });
+  if (!resp.ok) {
+    const detail = await resp.text();
+    throw new Error(`Image parse ${resp.status}: ${detail}`);
+  }
+  return resp.json() as Promise<InstructResponse>;
+}

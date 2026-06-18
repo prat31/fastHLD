@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { Mic, MicOff } from 'lucide-react';
 import type { VoiceMode, VoiceState } from '../../hooks/useVoiceInput';
 
@@ -10,6 +11,24 @@ interface VoiceInputProps {
 }
 
 export default function VoiceInput({ voiceState, supported, mode, onStart, onStop }: VoiceInputProps) {
+  // Start on pointer-down; guarantee the matching stop even if the pointer is
+  // released outside the button (a window listener avoids the "stuck on" bug
+  // where onMouseUp never fires because the cursor drifted off the button).
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      onStart();
+      const release = () => {
+        onStop();
+        window.removeEventListener('pointerup', release);
+        window.removeEventListener('pointercancel', release);
+      };
+      window.addEventListener('pointerup', release);
+      window.addEventListener('pointercancel', release);
+    },
+    [onStart, onStop],
+  );
+
   if (!supported) {
     return (
       <div
@@ -27,13 +46,10 @@ export default function VoiceInput({ voiceState, supported, mode, onStart, onSto
   return (
     <div className="flex items-center gap-2">
       <button
-        onMouseDown={onStart}
-        onMouseUp={onStop}
-        onTouchStart={onStart}
-        onTouchEnd={onStop}
+        onPointerDown={onPointerDown}
         tabIndex={-1}
         className={[
-          'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors shadow-sm select-none',
+          'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors shadow-sm select-none touch-none',
           isListening
             ? 'bg-red-500 text-white ring-2 ring-red-300 dark:ring-red-700'
             : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600',

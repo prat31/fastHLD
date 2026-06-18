@@ -1,8 +1,31 @@
+from __future__ import annotations
+
 import os
 from .base import LLMProvider
 from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAIProvider
 from .anthropic_provider import AnthropicProvider
+
+
+def get_vision_provider() -> LLMProvider | None:
+    """A vision-capable provider, independent of LLM_PROVIDER.
+
+    Prefers OpenAI (gpt-4o), then Anthropic (Claude). Returns None if neither
+    API key is configured, since the default Ollama model cannot read images.
+    """
+    openai_key = os.getenv("OPENAI_API_KEY", "")
+    if openai_key:
+        return OpenAIProvider(
+            api_key=openai_key,
+            model=os.getenv("OPENAI_VISION_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o")),
+        )
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if anthropic_key:
+        return AnthropicProvider(
+            api_key=anthropic_key,
+            model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+        )
+    return None
 
 
 def get_provider() -> LLMProvider:
